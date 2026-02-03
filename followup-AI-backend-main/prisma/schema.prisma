@@ -1,0 +1,635 @@
+// Prisma Schema for ReactivateAI
+// PostgreSQL Database with RED/YELLOW/GREEN contact priority, Visit history, and dormant reactivation
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================
+// CLINIC & ORGANIZATION MODELS
+// ============================================
+
+model Clinic {
+  id                    String   @id @default(uuid())
+  name                  String
+  email                 String   @unique
+  phone                 String?
+  timezone              String   @default("America/New_York")
+
+  // Subscription Info
+  subscription_tier     SubscriptionTier @default(STARTER)
+  stripe_customer_id    String?  @unique
+  subscription_status   SubscriptionStatus @default(TRIAL)
+  trial_ends_at         DateTime?
+
+  // Settings
+  message_limit         Int      @default(500)
+  locations_limit       Int      @default(3)
+
+  // Timestamps
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  // Relationships
+  locations             Location[]
+  users                 ClinicUser[]
+  patients              Patient[]
+  appointments          Appointment[]
+  conversations         UnifiedConversation[]
+  campaign_templates    CampaignTemplate[]
+  no_show_predictions   NoShowPrediction[]
+  webhook_logs          WebhookLog[]
+  subscriptions        Subscription[]
+  visits                Visit[]
+  reactivation_predictions ReactivationPrediction[]
+
+  @@index([subscription_tier])
+  @@index([created_at])
+}
+
+model Location {
+  id              String   @id @default(uuid())
+  clinic_id       String
+
+  name            String
+  phone_number    String?
+  address         String?
+  timezone        String   @default("America/New_York")
+
+  // Timestamps
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  // Relationships
+  clinic          Clinic   @relation(fields: [clinic_id], references: [id], onDelete: Cascade)
+  appointments    Appointment[]
+  conversations   UnifiedConversation[]
+  users           ClinicUser[]
+  visits          Visit[]
+
+  @@index([clinic_id])
+}
+
+model ClinicUser {
+  id              String   @id @default(uuid())
+  clinic_id       String
+  location_id     String?
+
+  email           String   @unique
+  password_hash   String
+  first_name      String
+  last_name       String
+  role            UserRole @default(STAFF)
+
+  // Settings
+  notification_preferences Json?  // {email_alerts: true, sms_alerts: false}
+
+  // Timestamps
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+  last_login_at   DateTime?
+
+  // Relationships
+  clinic          Clinic   @relation(fields: [clinic_id], references: [id], onDelete: Cascade)
+  location        Location? @relation(fields: [location_id], references: [id], onDelete: SetNull)
+  assigned_conversations UnifiedConversation[]
+  conversation_notes     ConversationNote[]
+
+  @@index([clinic_id])
+  @@index([email])
+}
+
+// ============================================
+// PATIENT MODELS
+// ============================================
+
+model Patient {
+  id                    String   @id @default(uuid())
+  clinic_id             String
+
+  // Personal Info
+  first_name            String
+  last_name             String
+  email                 String?
+  phone                 String
+  date_of_birth         DateTime?
+
+  // External IDs (from EMR systems)
+  external_patient_id   String?  // Epic/Cerner/Athena patient ID
+  emr_system            EmrSystem? // Which EMR this patient came from
+
+  // Patient Segment (for targeting)
+  segment               PatientSegment @default(ACTIVE)
+  preferred_channel     CommunicationChannel @default(SMS)
+
+  // Churn Risk
+  churn_risk_score      Float?   @default(0.0) // 0.0 - 1.0
+  churn_risk_level      RiskLevel?
+
+  // Contact/Reactivation Priority (RED/YELLOW/GREEN - dormant model output)
+  contact_priority      ContactPriority?
+  contact_priority_score Float?
+  contact_priority_factors Json?  // [{factor: "days_since_visit", weight: 0.35}, ...]
+
+  // Timestamps
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+  last_visit_at         DateTime?
+
+  // Relationships
+  clinic                Clinic   @relation(fields: [clinic_id], references: [id], onDelete: Cascade)
+  appointments         Appointment[]
+  conversations        UnifiedConversation[]
+  visits                Visit[]
+  reactivation_predictions ReactivationPrediction[]
+
+  @@index([clinic_id, created_at])
+  @@index([phone])
+  @@index([email])
+  @@index([external_patient_id])
+  @@index([segment])
+  @@index([contact_priority])
+}
+
+// ============================================
+// VISIT (visit history for EMR sync and AI)
+// ============================================
+
+model Visit {
+  id                  String   @id @default(uuid())
+  clinic_id           String
+  patient_id          String
+  location_id         String?
+
+  visit_date          DateTime
+  visit_type          String?   // "Checkup", "Procedure", "Consultation"
+  source              VisitSource @default(MANUAL)
+  external_visit_id   String?   // EMR sync (Epic/Cerner/Athena)
+
+  created_at          DateTime @default(now())
+
+  clinic              Clinic   @relation(fields: [clinic_id], references: [id], onDelete: Cascade)
+  patient             Patient  @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+  location            Location? @relation(fields: [location_id], references: [id], onDelete: SetNull)
+
+  @@index([clinic_id, visit_date])
+  @@index([patient_id, visit_date])
+}
+
+// ============================================
+// APPOINTMENT MODELS
+// ============================================
+
+model Appointment {
+  id                      String   @id @default(uuid())
+  clinic_id               String
+  location_id             String?
+  patient_id              String
+
+  // Appointment Details
+  appointment_datetime    DateTime
+  appointment_type        String?  // "Checkup", "Surgery", "Consultation"
+  provider_name           String?
+  duration_minutes        Int      @default(60)
+
+  // Status
+  status                  AppointmentStatus @default(SCHEDULED)
+  confirmed               Boolean  @default(false)
+  confirmed_at            DateTime?
+
+  // No-Show Tracking
+  no_show_risk_score      Float?
+  no_show_risk_level      RiskLevel?
+
+  // Reactivation Tracking (Revenue Recovery)
+  reactivated             Boolean  @default(false)
+  reactivation_source     String?  // "reactivateai", "organic", "other"
+  estimated_revenue       Float?   // Clinic's avg appointment value
+
+  // External IDs (from EMR)
+  external_appointment_id String?
+  emr_system              EmrSystem?
+
+  // Timestamps
+  created_at              DateTime @default(now())
+  updated_at              DateTime @updatedAt
+
+  // Relationships
+  clinic                  Clinic   @relation(fields: [clinic_id], references: [id], onDelete: Cascade)
+  location                Location? @relation(fields: [location_id], references: [id], onDelete: SetNull)
+  patient                 Patient  @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+  no_show_predictions     NoShowPrediction[]
+
+  @@index([clinic_id, appointment_datetime])
+  @@index([patient_id])
+  @@index([status])
+  @@index([appointment_datetime])
+}
+
+// ============================================
+// UNIFIED INBOX MODELS
+// ============================================
+
+model UnifiedConversation {
+  id                String   @id @default(uuid())
+  clinic_id         String
+  location_id       String?
+  patient_id        String
+
+  // Conversation Status
+  status            ConversationStatus @default(ACTIVE)
+  assigned_to       String?  // ClinicUser ID
+  tags              String[] // ["urgent", "vip", "post-op"]
+
+  // Message Tracking
+  unread_count      Int      @default(0)
+  last_message_at   DateTime @default(now())
+  last_message_preview String?
+
+  // Timestamps
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+  resolved_at       DateTime?
+
+  // Relationships
+  clinic            Clinic   @relation(fields: [clinic_id], references: [id], onDelete: Cascade)
+  location          Location? @relation(fields: [location_id], references: [id], onDelete: SetNull)
+  patient           Patient  @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+  assigned_user     ClinicUser? @relation(fields: [assigned_to], references: [id], onDelete: SetNull)
+  messages          UnifiedMessage[]
+  notes             ConversationNote[]
+
+  @@index([clinic_id, last_message_at(sort: Desc)])
+  @@index([patient_id])
+  @@index([status])
+  @@index([assigned_to])
+}
+
+model UnifiedMessage {
+  id                    String   @id @default(uuid())
+  conversation_id       String
+
+  // Message Content
+  message_text          String   @db.Text
+  channel               CommunicationChannel
+  direction             MessageDirection // inbound or outbound
+
+  // Delivery Status
+  status                MessageStatus @default(PENDING)
+  delivered_at          DateTime?
+  read_at               DateTime?
+  failed_reason         String?
+
+  // External IDs (from Twilio, Meta, etc)
+  external_message_id   String?  @unique
+
+  // Metadata
+  metadata              Json?    // {campaign_id, template_id, etc}
+
+  // Timestamps
+  sent_at               DateTime @default(now())
+
+  // Relationships
+  conversation          UnifiedConversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+
+  @@index([conversation_id, sent_at(sort: Desc)])
+  @@index([channel])
+  @@index([status])
+}
+
+model ConversationNote {
+  id                String   @id @default(uuid())
+  conversation_id   String
+  user_id           String
+
+  note_text         String   @db.Text
+  mentioned_users   String[] // User IDs mentioned with @
+
+  // Timestamps
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  // Relationships
+  conversation      UnifiedConversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  user              ClinicUser @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([conversation_id, created_at(sort: Desc)])
+}
+
+// ============================================
+// CAMPAIGN & TEMPLATE MODELS
+// ============================================
+
+model CampaignTemplate {
+  id                String   @id @default(uuid())
+  clinic_id         String
+
+  name              String
+  type              CampaignType
+  message_text      String   @db.Text
+
+  // A/B Testing
+  is_ab_test        Boolean  @default(false)
+  variant_a_text    String?  @db.Text
+  variant_b_text    String?  @db.Text
+
+  // Timestamps
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  // Relationships
+  clinic            Clinic   @relation(fields: [clinic_id], references: [id], onDelete: Cascade)
+  ab_tests          ABTest[]
+
+  @@index([clinic_id])
+  @@index([type])
+}
+
+model ABTest {
+  id                String   @id @default(uuid())
+  campaign_id       String
+
+  name              String
+  variant_a         String   @db.Text
+  variant_b         String   @db.Text
+
+  status            ABTestStatus @default(RUNNING)
+  winner            String?  // "variant_a" or "variant_b"
+
+  // Timestamps
+  created_at        DateTime @default(now())
+  completed_at      DateTime?
+
+  // Relationships
+  campaign          CampaignTemplate @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+  results           ABTestResult[]
+
+  @@index([campaign_id])
+  @@index([status])
+}
+
+model ABTestResult {
+  id                String   @id @default(uuid())
+  test_id           String
+  message_id        String
+
+  variant           String   // "variant_a" or "variant_b"
+  clicked           Boolean  @default(false)
+  response_received Boolean  @default(false)
+
+  // Timestamps
+  response_at       DateTime?
+  created_at        DateTime @default(now())
+
+  // Relationships
+  test              ABTest   @relation(fields: [test_id], references: [id], onDelete: Cascade)
+
+  @@index([test_id])
+}
+
+// ============================================
+// AI/ML MODELS
+// ============================================
+
+model NoShowPrediction {
+  id                  String   @id @default(uuid())
+  clinic_id           String
+  appointment_id      String
+
+  // Prediction
+  no_show_risk_score  Float    // 0.0 - 1.0
+  risk_level          RiskLevel
+
+  // Top Risk Factors (explainability)
+  top_risk_factors    Json     // [{factor: "days_since_visit", weight: 0.35}, ...]
+
+  // Features Used (12 features)
+  features            Json     // {days_since_visit: 45, is_early_morning: true, ...}
+
+  // Timestamps
+  predicted_at        DateTime @default(now())
+
+  // Relationships
+  clinic              Clinic   @relation(fields: [clinic_id], references: [id], onDelete: Cascade)
+  appointment         Appointment @relation(fields: [appointment_id], references: [id], onDelete: Cascade)
+
+  @@index([clinic_id])
+  @@index([appointment_id])
+  @@index([risk_level])
+}
+
+// Dormant-patient reactivation model output (history per run)
+model ReactivationPrediction {
+  id                  String   @id @default(uuid())
+  clinic_id           String
+  patient_id          String
+
+  contact_priority    ContactPriority   // RED, YELLOW, GREEN
+  score               Float             // 0.0 - 1.0
+  top_factors         Json              // [{factor: "days_since_visit", weight: 0.35}, ...]
+
+  predicted_at        DateTime @default(now())
+
+  clinic              Clinic   @relation(fields: [clinic_id], references: [id], onDelete: Cascade)
+  patient             Patient  @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+
+  @@index([clinic_id])
+  @@index([patient_id])
+  @@index([contact_priority])
+  @@index([predicted_at(sort: Desc)])
+}
+
+// ============================================
+// SUBSCRIPTION & BILLING MODELS
+// ============================================
+
+model Subscription {
+  id                String   @id @default(uuid())
+  clinic_id         String
+
+  // Stripe Info
+  stripe_subscription_id String? @unique
+  stripe_customer_id     String?
+
+  // Plan Details
+  tier              SubscriptionTier
+  status            SubscriptionStatus
+  price_monthly     Float
+
+  // Timestamps
+  started_at        DateTime @default(now())
+  renews_at         DateTime?
+  cancelled_at      DateTime?
+
+  // Relationships
+  clinic            Clinic   @relation(fields: [clinic_id], references: [id], onDelete: Cascade)
+
+  @@index([clinic_id])
+  @@index([status])
+}
+
+// ============================================
+// WEBHOOK & AUDIT LOGS
+// ============================================
+
+model WebhookLog {
+  id                String   @id @default(uuid())
+  clinic_id         String?
+
+  source            WebhookSource
+  event_type        String   // "message.received", "payment.succeeded"
+  payload           Json
+
+  status            String   // "success", "failed"
+  error_message     String?  @db.Text
+
+  // Timestamps
+  received_at       DateTime @default(now())
+
+  // Relationships
+  clinic            Clinic?  @relation(fields: [clinic_id], references: [id], onDelete: Cascade)
+
+  @@index([clinic_id])
+  @@index([source])
+  @@index([received_at])
+}
+
+model AuditLog {
+  id                String   @id @default(uuid())
+  user_id           String?
+
+  action            String   // "view_patient", "send_message", "update_appointment"
+  resource_type     String   // "patient", "appointment", "conversation"
+  resource_id       String
+
+  metadata          Json?    // Additional context
+  ip_address        String?
+
+  // Timestamps
+  created_at        DateTime @default(now())
+
+  @@index([user_id])
+  @@index([resource_type, resource_id])
+  @@index([created_at])
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum SubscriptionTier {
+  STARTER
+  PROFESSIONAL
+  ADVANCED
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  CANCELLED
+  PAUSED
+  PAST_DUE
+}
+
+enum UserRole {
+  ADMIN
+  STAFF
+  VIEWER
+}
+
+enum EmrSystem {
+  EPIC
+  CERNER
+  ATHENA
+}
+
+enum PatientSegment {
+  ACTIVE          // Visited recently
+  AT_RISK         // Haven't visited in 60+ days
+  DORMANT         // Haven't visited in 180+ days
+  NEW             // First visit <30 days ago
+}
+
+// Contact/Reactivation priority (RED = highest, GREEN = lowest) for dormant outreach
+enum ContactPriority {
+  RED
+  YELLOW
+  GREEN
+}
+
+enum VisitSource {
+  EMR
+  MANUAL
+}
+
+enum CommunicationChannel {
+  SMS
+  WHATSAPP
+  EMAIL
+  FACEBOOK_MESSENGER
+  INSTAGRAM_DM
+  VOICE
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum ConversationStatus {
+  ACTIVE
+  RESOLVED
+  ARCHIVED
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+  RESCHEDULED
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum CampaignType {
+  REMINDER
+  CONFIRMATION
+  NO_SHOW_PREVENTION
+  POST_OP_FOLLOWUP
+  REACTIVATION
+  RETENTION
+}
+
+enum ABTestStatus {
+  RUNNING
+  COMPLETED
+  PAUSED
+}
+
+enum WebhookSource {
+  TWILIO
+  META
+  STRIPE
+  EPIC
+  CERNER
+  ATHENA
+}

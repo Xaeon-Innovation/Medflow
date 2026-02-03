@@ -1,0 +1,47 @@
+{
+  "name": "xaeon-proj",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  },
+  "scripts": {
+    "start": "node dist/server.js",
+    "dev": "npx nodemon --watch src --exec npx ts-node src/server.ts",
+    "dev:full": "scripts/dev.bat",
+    "build": "node node_modules/prisma/build/index.js generate && npx tsc",
+    "lint": "npx eslint \"src/**/*.ts\"",
+    "format": "npx prettier --write \"src/**/*.ts\"",
+    "db:migrate": "node node_modules/prisma/build/index.js migrate dev",
+    "db:seed": "node node_modules/prisma/build/index.js db seed",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.3.0",
+    "@prisma/client": "^7.3.0",
+    "axios": "^1.13.4",
+    "bcryptjs": "^3.0.3",
+    "body-parser": "^2.2.2",
+    "cors": "^2.8.6",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.17.2",
+    "prisma": "^7.3.0",
+    "redis": "^5.10.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/body-parser": "^1.19.6",
+    "@types/cors": "^2.8.19",
+    "@types/node": "^25.1.0",
+    "ts-node": "^10.9.2"
+  }
+}
