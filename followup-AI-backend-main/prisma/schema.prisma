@@ -633,3 +633,296 @@ enum WebhookSource {
   CERNER
   ATHENA
 }
+
+// ============================================
+// AI CHAT MODELS (MedGemma-powered)
+// ============================================
+
+model AIChatSession {
+  id              String       @id @default(uuid())
+  clinic_id       String
+  patient_id      String?
+  user_id         String?
+
+  session_type    AIChatType
+  model_used      String       @default("medgemma-27b-text")
+
+  context_tokens  Int          @default(0)
+  total_messages  Int          @default(0)
+
+  escalated       Boolean      @default(false)
+  escalation_reason String?
+
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+  ended_at        DateTime?
+
+  messages        AIChatMessage[]
+
+  @@index([clinic_id, created_at])
+  @@index([patient_id])
+}
+
+model AIChatMessage {
+  id                String      @id @default(uuid())
+  session_id        String
+
+  role              ChatRole
+  content           String      @db.Text
+  content_type      ContentType @default(TEXT)
+
+  model_version     String?
+  inference_time_ms Int?
+  confidence_score  Float?
+  tokens_used       Int?
+
+  flagged           Boolean     @default(false)
+  flag_reason       String?
+
+  created_at        DateTime    @default(now())
+
+  session           AIChatSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  @@index([session_id, created_at])
+}
+
+// ============================================
+// MEDICAL IMAGING (MedGemma-powered)
+// ============================================
+
+model MedicalImage {
+  id              String           @id @default(uuid())
+  clinic_id       String
+  patient_id      String
+
+  modality        ImagingModality
+  body_region     String?
+  file_path       String
+  file_size_bytes Int
+  mime_type       String
+
+  source          ImageSource      @default(UPLOAD)
+  dicom_study_uid String?
+
+  uploaded_at     DateTime         @default(now())
+  uploaded_by     String?
+
+  analyses        ImagingAnalysis[]
+
+  @@index([clinic_id, patient_id])
+  @@index([modality])
+}
+
+model ImagingAnalysis {
+  id                 String        @id @default(uuid())
+  image_id           String
+  clinic_id          String
+
+  model_used         String
+  findings           Json
+  impression         String        @db.Text
+  recommendations    String?       @db.Text
+
+  urgency_level      UrgencyLevel
+  urgency_reason     String?
+  overall_confidence Float
+  inference_time_ms  Int?
+
+  review_status      ReviewStatus  @default(PENDING_REVIEW)
+  reviewed_by        String?
+  reviewer_notes     String?       @db.Text
+  reviewed_at        DateTime?
+
+  compared_to_image_id String?
+  comparison_notes   String?       @db.Text
+
+  created_at         DateTime      @default(now())
+
+  image              MedicalImage  @relation(fields: [image_id], references: [id], onDelete: Cascade)
+
+  @@index([image_id])
+  @@index([clinic_id, urgency_level])
+  @@index([review_status])
+}
+
+// ============================================
+// TRIAGE (MedGemma-powered)
+// ============================================
+
+model TriageAssessment {
+  id                 String    @id @default(uuid())
+  clinic_id          String
+  patient_id         String?
+  session_id         String?
+
+  chief_complaint    String    @db.Text
+  symptom_duration   String?
+  symptoms           Json
+
+  esi_level          Int
+  acuity_score       Float
+  recommended_dept   String
+  differential_dx    Json
+
+  red_flags          String[]
+  is_emergency       Boolean   @default(false)
+
+  model_used         String
+  confidence_score   Float
+  reasoning          String?   @db.Text
+
+  actual_diagnosis   String?
+  actual_esi_level   Int?
+
+  created_at         DateTime  @default(now())
+
+  @@index([clinic_id, created_at])
+  @@index([esi_level])
+  @@index([is_emergency])
+}
+
+// ============================================
+// CLINICAL DOCUMENTATION (MedGemma-powered)
+// ============================================
+
+model ClinicalDocument {
+  id                 String          @id @default(uuid())
+  clinic_id          String
+  patient_id         String
+  appointment_id     String?
+
+  doc_type           ClinicalDocType
+  title              String
+  content            String          @db.Text
+  content_structured Json?
+  model_used         String
+  prompt_used        String?         @db.Text
+
+  suggested_icd10    String[]
+  suggested_cpt      String[]
+
+  status             DocStatus       @default(DRAFT)
+  reviewed_by        String?
+  final_content      String?         @db.Text
+  reviewed_at        DateTime?
+
+  created_at         DateTime        @default(now())
+  updated_at         DateTime        @updatedAt
+
+  @@index([clinic_id, patient_id])
+  @@index([doc_type])
+  @@index([status])
+}
+
+// ============================================
+// PATIENT HEALTH TIMELINE (MedGemma-powered)
+// ============================================
+
+model HealthTimelineEvent {
+  id              String            @id @default(uuid())
+  patient_id      String
+  clinic_id       String
+
+  event_type      TimelineEventType
+  event_date      DateTime
+  title           String
+  description     String?           @db.Text
+
+  ai_summary      String?           @db.Text
+  ai_insights     Json?
+
+  source_type     String?
+  source_id       String?
+  metadata        Json?
+
+  created_at      DateTime          @default(now())
+
+  @@index([patient_id, event_date])
+  @@index([clinic_id])
+  @@index([event_type])
+}
+
+// ============================================
+// AI ENUMS
+// ============================================
+
+enum AIChatType {
+  CLINICAL_COPILOT
+  PATIENT_CHAT
+  TRIAGE
+  DOCUMENTATION
+  RESEARCH
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum ContentType {
+  TEXT
+  IMAGE
+  STRUCTURED
+  MIXED
+}
+
+enum ImagingModality {
+  XRAY
+  CT
+  MRI
+  ULTRASOUND
+  DERM
+  OPHTHO
+  PATHOLOGY
+}
+
+enum ImageSource {
+  UPLOAD
+  DICOM
+  EMR_SYNC
+  MOBILE
+}
+
+enum UrgencyLevel {
+  STAT
+  URGENT
+  ROUTINE
+  INCIDENTAL
+}
+
+enum ReviewStatus {
+  PENDING_REVIEW
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  AMENDED
+}
+
+enum ClinicalDocType {
+  SOAP_NOTE
+  DISCHARGE_SUMMARY
+  REFERRAL_LETTER
+  PRIOR_AUTH
+  PATIENT_INSTRUCTIONS
+  PROGRESS_NOTE
+}
+
+enum DocStatus {
+  DRAFT
+  PENDING_REVIEW_DOC
+  APPROVED_DOC
+  SIGNED
+  AMENDED
+}
+
+enum TimelineEventType {
+  VISIT
+  LAB_RESULT
+  IMAGING
+  MEDICATION
+  PROCEDURE
+  NOTE
+  VITAL_SIGNS
+  VACCINATION
+}

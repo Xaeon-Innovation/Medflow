@@ -1,10 +1,8 @@
 node_modules
 dist
 .git
-.gitignore
+.next
+out
 *.log
 .env
-.env.local
-.DS_Store
-coverage
-.nyc_output
+.env.*

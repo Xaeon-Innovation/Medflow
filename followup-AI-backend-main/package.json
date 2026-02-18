@@ -8,14 +8,14 @@
   },
   "scripts": {
     "start": "node dist/server.js",
-    "dev": "npx nodemon --watch src --exec npx ts-node src/server.ts",
+    "dev": "npx nodemon --watch src --ext ts,json --exec npx ts-node src/server.ts",
     "dev:full": "scripts/dev.bat",
     "build": "node node_modules/prisma/build/index.js generate && npx tsc",
     "lint": "npx eslint \"src/**/*.ts\"",
     "format": "npx prettier --write \"src/**/*.ts\"",
     "db:migrate": "node node_modules/prisma/build/index.js migrate dev",
     "db:seed": "node node_modules/prisma/build/index.js db seed",
-    "docker:up": "docker-compose up -d",
+    "docker:up": "docker-compose up -d postgres redis",
     "docker:down": "docker-compose down"
   },
   "keywords": [],
@@ -23,6 +23,8 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@google-cloud/aiplatform": "^6.4.0",
+    "@google-cloud/vertexai": "^1.10.0",
     "@prisma/adapter-pg": "^7.3.0",
     "@prisma/client": "^7.3.0",
     "axios": "^1.13.4",
@@ -33,15 +35,20 @@
     "express": "^5.2.1",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
+    "multer": "^2.0.2",
     "pg": "^8.17.2",
     "prisma": "^7.3.0",
-    "redis": "^5.10.0"
+    "redis": "^5.10.0",
+    "uuid": "^13.0.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/body-parser": "^1.19.6",
     "@types/cors": "^2.8.19",
+    "@types/multer": "^2.0.0",
     "@types/node": "^25.1.0",
+    "@types/uuid": "^10.0.0",
     "ts-node": "^10.9.2"
   }
 }

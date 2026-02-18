@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "es2020", // Modern JS output
+    "typeRoots": ["./node_modules/@types"],
+    "paths": {
+      "@prisma/client": ["./node_modules/.prisma/client"],
+      "@prisma/client/*": ["./node_modules/.prisma/client/*"]
+    },
+    "types": ["node", "body-parser", "express", "express-serve-static-core", "cors", "dotenv", "bcrypt", "jsonwebtoken", "node-cron", "connect", "http-errors", "mime", "qs", "range-parser", "send", "serve-static", "strip-bom", "strip-json-comments"],
+    "module": "commonjs", // Node uses CommonJS
+    "outDir": "./dist", // Compiled JS files
+    "rootDir": "./src", // Source TS files
+    "strict": true, // Enable strict type-checking
+    "esModuleInterop": true, // For import compatibility
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "moduleResolution": "node"
+  },
+  "include": ["src"],
+  "exclude": ["node_modules"]
+}

@@ -33,6 +33,45 @@ services:
       timeout: 5s
       retries: 5
 
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: reactivate_backend
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/hospital_ai?schema=public
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src
+      - ./prisma:/app/prisma
+    command: npm run dev
+
+  frontend:
+    build:
+      context: ../followup-AI-frontend-main
+      dockerfile: ../followup-AI-backend-main/Dockerfile.frontend
+      target: development
+    container_name: reactivate_frontend
+    restart: unless-stopped
+    ports:
+      - '3001:3001'
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:3000
+    volumes:
+      - ../followup-AI-frontend-main/src:/app/src
+    command: npm run dev -- -p 3001
+
 volumes:
   postgres_data:
   redis_data:

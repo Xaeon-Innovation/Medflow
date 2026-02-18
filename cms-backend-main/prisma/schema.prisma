@@ -1,0 +1,1165 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Appointment {
+  id                        String                  @id @default(uuid())
+  patientId                 String
+  visitId                   String?
+  scheduledDate             DateTime
+  status                    AppointmentStatus
+  createdById               String
+  createdAt                 DateTime                @default(now())
+  updatedAt                 DateTime                @updatedAt
+  bookingSource             String?
+  familyMemberId            String?
+  hospitalId                String
+  isMobileBooking           Boolean                 @default(false)
+  pointsAwarded             Int                     @default(0)
+  salesPersonId             String
+  serviceType               String?
+  speciality                String?
+  driverId                  String?
+  driverNeeded              Boolean                 @default(false)
+  notes                     String?
+  isNewPatientAtCreation    Boolean                 @default(false)
+  isNotBooked               Boolean                 @default(false)
+  createdFromFollowUpTaskId String?
+  createdFromFollowUpTask   FollowUpTask?           @relation("FollowUpTaskAppointments", fields: [createdFromFollowUpTaskId], references: [id])
+  createdBy                 Employee                @relation("CreatedBy", fields: [createdById], references: [id])
+  driver                    Employee?               @relation("AssignedDriver", fields: [driverId], references: [id])
+  familyMember              FamilyMember?           @relation(fields: [familyMemberId], references: [id])
+  hospital                  Hospital                @relation(fields: [hospitalId], references: [id])
+  patient                   Patient                 @relation(fields: [patientId], references: [id])
+  salesPerson               Employee                @relation("AppointmentSales", fields: [salesPersonId], references: [id])
+  visit                     Visit?                  @relation(fields: [visitId], references: [id])
+  appointmentSpecialities   AppointmentSpeciality[]
+  escortTask                EscortTask?             @relation("EscortTask")
+
+  @@index([patientId])
+  @@index([visitId])
+  @@index([hospitalId])
+  @@index([salesPersonId])
+  @@index([scheduledDate])
+  @@index([status])
+  @@index([createdById])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+model AppointmentSpeciality {
+  id            String                      @id @default(uuid())
+  appointmentId String
+  specialityId  String
+  doctorId      String
+  scheduledTime DateTime
+  status        AppointmentSpecialityStatus @default(scheduled)
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+  appointment   Appointment                 @relation(fields: [appointmentId], references: [id])
+  doctor        Doctor                      @relation(fields: [doctorId], references: [id])
+  speciality    Speciality                  @relation(fields: [specialityId], references: [id])
+
+  @@unique([appointmentId, specialityId, doctorId])
+  @@index([appointmentId])
+  @@index([specialityId])
+  @@index([doctorId])
+  @@index([status])
+  @@index([scheduledTime])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+model AuditLog {
+  id         String        @id @default(uuid())
+  userId     String
+  action     String
+  entityType String
+  entityId   String?
+  beforeData Json?
+  afterData  Json?
+  ipAddress  String?
+  userAgent  String?
+  timestamp  DateTime      @default(now())
+  severity   AuditSeverity @default(info)
+  details    String?
+  user       Employee      @relation("AuditLogs", fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([severity])
+  @@index([timestamp])
+  @@index([ipAddress])
+  @@index([userId, timestamp])
+  @@index([entityType, entityId])
+  @@index([action, timestamp])
+  @@index([severity, timestamp])
+}
+
+model Commission {
+  id                String           @id @default(uuid())
+  employeeId        String
+  amount            Int              @default(1)
+  type              CommissionType
+  description       String
+  patientId         String?
+  visitSpecialityId String?
+  nominationId      String?
+  period            String
+  isProcessed       Boolean          @default(false)
+  processedAt       DateTime?
+  createdAt         DateTime         @default(now())
+  employee          Employee         @relation(fields: [employeeId], references: [id])
+  nomination        Nomination?      @relation(fields: [nominationId], references: [id])
+  patient           Patient?         @relation(fields: [patientId], references: [id])
+  visitSpeciality   VisitSpeciality? @relation(fields: [visitSpecialityId], references: [id])
+
+  @@index([employeeId])
+  @@index([type])
+  @@index([period])
+  @@index([isProcessed])
+  @@index([patientId])
+  @@index([visitSpecialityId])
+  @@index([nominationId])
+  @@index([createdAt])
+  @@index([processedAt])
+  @@index([employeeId, type, period])
+  @@index([employeeId, isProcessed])
+  @@index([type, period])
+}
+
+model Doctor {
+  id                      String                  @id @default(uuid())
+  createdAt               DateTime                @default(now())
+  name                    String
+  email                   String?
+  hospitalId              String
+  isActive                Boolean                 @default(true)
+  phone                   String?
+  updatedAt               DateTime                @updatedAt
+  appointmentSpecialities AppointmentSpeciality[]
+  hospital                Hospital                @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  doctorSpecialties       DoctorSpecialty[]
+  visitSpecialities       VisitSpeciality[]
+
+  @@index([name])
+  @@index([hospitalId])
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+model Employee {
+  id                        String                     @id @default(uuid())
+  password                  String
+  phone                     String
+  role                      Role
+  isActive                  Boolean                    @default(true)
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  accountStatus             AccountStatus
+  commissions               Int                        @default(0)
+  dailyTarget               Int                        @default(0)
+  employeeId                String?                    @unique
+  monthlyTarget             Int                        @default(0)
+  name                      String
+  rank                      Int                        @default(0)
+  rating                    Float                      @default(0.0)
+  sales                     Int                        @default(0)
+  weeklyTarget              Int                        @default(0)
+  createdAppointments       Appointment[]              @relation("CreatedBy")
+  assignedAppointments      Appointment[]              @relation("AssignedDriver")
+  appointmentSales          Appointment[]              @relation("AppointmentSales")
+  auditLogs                 AuditLog[]                 @relation("AuditLogs")
+  commissionHistory         Commission[]
+  roleAssignments           EmployeeRole[]             @relation("RoleAssignment")
+  employeeRoles             EmployeeRole[]
+  importExportLogs          ImportExportLog[]          @relation("ImportExportLogs")
+  nominationsAsCoord        Nomination[]               @relation("CoordNominations")
+  nominationsAsSales        Nomination[]               @relation("SalesNominations")
+  notifications             Notification[]
+  notificationPreferences   NotificationPreference?
+  userPreferences           UserPreference?
+  patientSales              Patient[]                  @relation("PatientSales")
+  assignedByHistory         PatientAssignmentHistory[] @relation("AssignedBy")
+  assignmentHistory         PatientAssignmentHistory[]
+  targetsCreated            Target[]                   @relation("CreatedTargets")
+  targetsAssigned           Target[]                   @relation("AssignedTargets")
+  tasksCreated              Task[]                     @relation("CreatedTasks")
+  tasksAssigned             Task[]                     @relation("AssignedTasks")
+  recordedTransactions      Transaction[]              @relation("RecordedBy")
+  visitsAsCoordinator       Visit[]                    @relation("CoordinatorVisits")
+  visitsAsSales             Visit[]                    @relation("SalesVisits")
+  scanHistory               ScanRecord[]
+  assignedFollowUpTasks     FollowUpTask[]             @relation("AssignedFollowUpTasks")
+  createdFollowUpTasks      FollowUpTask[]             @relation("CreatedFollowUpTasks")
+  escortTasks               EscortTask[]               @relation("EscortTasks")
+  specialtyTasks            SpecialtyTask[]            @relation("SpecialtyTasks")
+  nominationTasks           NominationTask[]           @relation("NominationTasks")
+  dataEntryTasks            DataEntryTask[]            @relation("DataEntryTasks")
+  salesContactTasks         SalesContactTask[]         @relation("SalesContactTasks")
+  teamsLed                  Team[]                     @relation("TeamLeader")
+  teamMemberships           TeamMember[]
+  hospitalAccesses          EmployeeHospitalAccess[]   @relation("EmployeeHospitalAccess")
+  hospitalAccessAssignments EmployeeHospitalAccess[]   @relation("HospitalAccessAssignments")
+
+  @@index([name])
+  @@index([phone])
+  @@index([role])
+  @@index([isActive])
+  @@index([commissions])
+  @@index([sales])
+  @@index([rating])
+  @@index([createdAt])
+}
+
+model EmployeeRole {
+  id           String   @id @default(uuid())
+  employeeId   String
+  role         Role
+  isActive     Boolean  @default(true)
+  assignedAt   DateTime @default(now())
+  assignedById String
+  assignedBy   Employee @relation("RoleAssignment", fields: [assignedById], references: [id])
+  employee     Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, role])
+  @@index([employeeId])
+  @@index([role])
+  @@index([isActive])
+  @@index([assignedAt])
+}
+
+model EmployeeHospitalAccess {
+  id           String   @id @default(uuid())
+  employeeId   String
+  hospitalId   String
+  assignedAt   DateTime @default(now())
+  assignedById String
+  employee     Employee @relation("EmployeeHospitalAccess", fields: [employeeId], references: [id], onDelete: Cascade)
+  hospital     Hospital @relation("EmployeeHospitalAccess", fields: [hospitalId], references: [id], onDelete: Cascade)
+  assignedBy   Employee @relation("HospitalAccessAssignments", fields: [assignedById], references: [id])
+
+  @@unique([employeeId, hospitalId])
+  @@index([employeeId])
+  @@index([hospitalId])
+  @@index([assignedAt])
+}
+
+model FamilyMember {
+  id              String        @id @default(cuid())
+  firstName       String
+  lastName        String
+  dateOfBirth     DateTime
+  gender          Gender
+  relationship    String
+  phone           String?
+  email           String?
+  medicalHistory  String?
+  allergies       String?
+  insuranceInfo   String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  qrCodeData      String        @unique @default(cuid())
+  profileImageUrl String?
+  isActive        Boolean       @default(true)
+  points          Int           @default(0)
+  specialities    String[]
+  services        String[]
+  patientId       String
+  appointments    Appointment[]
+  patient         Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  scanHistory     ScanRecord[]
+
+  @@map("family_members")
+}
+
+model Hospital {
+  id                String                   @id @default(uuid())
+  name              String                   @unique
+  address           String?
+  contactInfo       Json?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  appointments      Appointment[]
+  doctors           Doctor[]
+  patients          Patient[]                @relation("PatientHospital")
+  patientMRNs       PatientHospitalMRN[]     @relation("HospitalPatientMRNs")
+  transactions      Transaction[]
+  visits            Visit[]
+  salesContactTasks SalesContactTask[]       @relation("SalesContactTasks")
+  employeeAccesses  EmployeeHospitalAccess[] @relation("EmployeeHospitalAccess")
+
+  @@index([name])
+  @@index([createdAt])
+}
+
+model ImportExportLog {
+  id           String             @id @default(uuid())
+  userId       String
+  actionType   ActionType
+  entityType   String
+  status       ImportExportStatus
+  fileName     String?
+  fileSize     Int?
+  recordCount  Int?
+  errorMessage String?
+  metadata     Json?
+  createdAt    DateTime           @default(now())
+  completedAt  DateTime?
+  user         Employee           @relation("ImportExportLogs", fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([actionType])
+  @@index([entityType])
+  @@index([status])
+  @@index([createdAt])
+  @@index([completedAt])
+  @@index([userId, actionType])
+  @@index([status, createdAt])
+}
+
+model MobileNotification {
+  id        String   @id @default(cuid())
+  title     String
+  message   String
+  type      String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  patientId String
+  patient   Patient  @relation("PatientMobileNotifications", fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("mobile_notifications")
+}
+
+model Nomination {
+  id                    String            @id @default(uuid())
+  visitId               String
+  referrerId            String
+  salesId               String
+  coordinatorId         String
+  nominatedPatientName  String
+  nominatedPatientPhone String
+  status                NominationStatus
+  convertedToPatientId  String?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  commissions           Commission[]
+  convertedToPatient    Patient?          @relation("ConvertedNominations", fields: [convertedToPatientId], references: [id])
+  coordinator           Employee          @relation("CoordNominations", fields: [coordinatorId], references: [id])
+  referrer              Patient           @relation("ReferrerNominations", fields: [referrerId], references: [id])
+  sales                 Employee          @relation("SalesNominations", fields: [salesId], references: [id])
+  visit                 Visit             @relation(fields: [visitId], references: [id])
+  nominationTask        NominationTask?   @relation("NominationTask")
+  salesContactTask      SalesContactTask? @relation("SalesContactTask")
+
+  @@index([visitId])
+  @@index([referrerId])
+  @@index([salesId])
+  @@index([coordinatorId])
+  @@index([status])
+  @@index([convertedToPatientId])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+model Notification {
+  id          String               @id @default(uuid())
+  userId      String
+  content     String
+  isRead      Boolean              @default(false)
+  isArchived  Boolean              @default(false)
+  createdAt   DateTime             @default(now())
+  channels    NotificationChannel
+  metadata    Json?
+  priority    NotificationPriority @default(MEDIUM)
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  title       String
+  updatedAt   DateTime             @updatedAt
+  type        NotificationType
+  user        Employee             @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([type])
+  @@index([priority])
+  @@index([isRead])
+  @@index([isArchived])
+  @@index([scheduledAt])
+  @@index([sentAt])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([userId, isRead, createdAt])
+  @@index([userId, type, createdAt])
+  @@index([scheduledAt, sentAt])
+}
+
+model NotificationPreference {
+  id                       String   @id @default(uuid())
+  userId                   String   @unique
+  soundEnabled             Boolean  @default(true)
+  smsEnabled               Boolean  @default(true)
+  emailEnabled             Boolean  @default(true)
+  appointmentNotifications Boolean  @default(true)
+  createdAt                DateTime @default(now())
+  inAppEnabled             Boolean  @default(true)
+  nominationNotifications  Boolean  @default(true)
+  patientNotifications     Boolean  @default(true)
+  quietHoursEnd            String?
+  quietHoursStart          String?
+  systemNotifications      Boolean  @default(true)
+  taskNotifications        Boolean  @default(true)
+  timezone                 String   @default("UTC")
+  transactionNotifications Boolean  @default(true)
+  updatedAt                DateTime @updatedAt
+  user                     Employee @relation(fields: [userId], references: [id])
+
+  @@index([soundEnabled])
+  @@index([smsEnabled])
+  @@index([emailEnabled])
+  @@index([inAppEnabled])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+model UserPreference {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  pagePreferences Json?    @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            Employee @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+model NotificationTemplate {
+  id              String               @id @default(uuid())
+  name            String               @unique
+  type            NotificationType
+  title           String
+  content         String
+  isActive        Boolean              @default(true)
+  variables       String[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  defaultChannel  NotificationChannel
+  defaultPriority NotificationPriority @default(MEDIUM)
+
+  @@index([name])
+  @@index([type])
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+model Patient {
+  id                   String                     @id @default(uuid())
+  nameEnglish          String
+  nameArabic           String
+  nationalId           String                     @unique
+  phoneNumber          String
+  nationality          String?
+  dob                  DateTime?
+  gender               Gender?
+  residencyEmirate     String?
+  jobTitle             String?
+  organization         String?
+  referredById         String?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  assignedHospitalId   String?
+  deviceTokens         String[]
+  isActive             Boolean                    @default(true)
+  lastLoginAt          DateTime?
+  points               Int                        @default(0)
+  preferences          Json?
+  profileImageUrl      String?
+  qrCodeData           String                     @unique @default(cuid())
+  referralSource       String?
+  salesPersonId        String?
+  services             String[]
+  specialities         String[]
+  insuranceTypeId      String?
+  appointments         Appointment[]
+  commissions          Commission[]
+  convertedNominations Nomination[]               @relation("ConvertedNominations")
+  nominations          Nomination[]               @relation("ReferrerNominations")
+  assignedHospital     Hospital?                  @relation("PatientHospital", fields: [assignedHospitalId], references: [id])
+  insuranceType        InsuranceType?             @relation("PatientInsuranceType", fields: [insuranceTypeId], references: [id])
+  referredBy           Patient?                   @relation("PatientReferrals", fields: [referredById], references: [id])
+  referredPatients     Patient[]                  @relation("PatientReferrals")
+  salesPerson          Employee?                  @relation("PatientSales", fields: [salesPersonId], references: [id])
+  assignmentHistory    PatientAssignmentHistory[]
+  hospitalMRNs         PatientHospitalMRN[]       @relation("PatientHospitalMRNs")
+  transactions         Transaction[]
+  visits               Visit[]
+  familyMembers        FamilyMember[]
+  mobileNotifications  MobileNotification[]       @relation("PatientMobileNotifications")
+  scanHistory          ScanRecord[]
+  followUpTasks        FollowUpTask[]             @relation("FollowUpTasks")
+  dataEntryTasks       DataEntryTask[]            @relation("DataEntryTasks")
+
+  @@index([nationalId])
+  @@index([phoneNumber])
+  @@index([salesPersonId])
+  @@index([assignedHospitalId])
+  @@index([referralSource])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+model PatientAssignmentHistory {
+  id           String    @id @default(uuid())
+  patientId    String
+  userId       String
+  role         Role
+  assignedById String
+  assignedAt   DateTime
+  unassignedAt DateTime?
+  assignedBy   Employee  @relation("AssignedBy", fields: [assignedById], references: [id])
+  patient      Patient   @relation(fields: [patientId], references: [id])
+  user         Employee  @relation(fields: [userId], references: [id])
+
+  @@index([patientId])
+  @@index([userId])
+  @@index([role])
+  @@index([assignedAt])
+  @@index([unassignedAt])
+}
+
+model PatientHospitalMRN {
+  id         String   @id @default(uuid())
+  patientId  String
+  hospitalId String
+  mrn        String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  hospital   Hospital @relation("HospitalPatientMRNs", fields: [hospitalId], references: [id])
+  patient    Patient  @relation("PatientHospitalMRNs", fields: [patientId], references: [id])
+
+  @@unique([hospitalId, mrn])
+  @@unique([patientId, hospitalId])
+  @@index([patientId])
+  @@index([hospitalId])
+  @@index([mrn])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+model Permission {
+  id              String           @id @default(uuid())
+  name            String           @unique
+  description     String?
+  resource        String
+  action          String
+  rolePermissions RolePermission[]
+
+  @@index([name])
+  @@index([resource])
+  @@index([action])
+}
+
+model RolePermission {
+  id           String     @id @default(uuid())
+  role         Role
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@index([role])
+  @@index([permissionId])
+  @@index([role, permissionId])
+}
+
+model ScanRecord {
+  id                String        @id @default(cuid())
+  scannedId         String
+  scannedType       String
+  displayName       String
+  timestamp         DateTime      @default(now())
+  coordinatorId     String
+  patientId         String?
+  familyMemberId    String?
+  visitConfirmed    Boolean       @default(false)
+  pointsAwarded     Int           @default(0)
+  specialitiesAdded String[]
+  servicesAdded     String[]
+  coordinator       Employee      @relation(fields: [coordinatorId], references: [id], onDelete: Cascade)
+  familyMember      FamilyMember? @relation(fields: [familyMemberId], references: [id], onDelete: Cascade)
+  patient           Patient?      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("scan_records")
+}
+
+model Speciality {
+  id                      String                  @id @default(uuid())
+  name                    String                  @unique
+  nameArabic              String?
+  category                String?
+  isActive                Boolean                 @default(true)
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+  appointmentSpecialities AppointmentSpeciality[]
+  doctorSpecialties       DoctorSpecialty[]
+  visitSpecialities       VisitSpeciality[]
+
+  @@index([name])
+  @@index([category])
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+model DoctorSpecialty {
+  id           String     @id @default(uuid())
+  doctorId     String
+  specialityId String
+  createdAt    DateTime   @default(now())
+  doctor       Doctor     @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  speciality   Speciality @relation(fields: [specialityId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, specialityId])
+  @@index([doctorId])
+  @@index([specialityId])
+  @@index([createdAt])
+}
+
+model Target {
+  id           String           @id @default(uuid())
+  assignedToId String
+  assignedById String
+  type         TargetType
+  category     String // "new_patients", "follow_up_patients", "specialties", "nominations", "custom"
+  description  String
+  targetValue  Int
+  currentValue Int              @default(0)
+  startDate    DateTime
+  endDate      DateTime
+  completedAt  DateTime?
+  isActive     Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  teamId       String?
+  assignedBy   Employee         @relation("CreatedTargets", fields: [assignedById], references: [id])
+  assignedTo   Employee         @relation("AssignedTargets", fields: [assignedToId], references: [id])
+  team         Team?            @relation("TeamTargets", fields: [teamId], references: [id])
+  progress     TargetProgress[]
+
+  @@index([assignedToId])
+  @@index([assignedById])
+  @@index([type])
+  @@index([category])
+  @@index([startDate])
+  @@index([endDate])
+  @@index([completedAt])
+  @@index([teamId])
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+model TargetProgress {
+  id        String   @id @default(uuid())
+  targetId  String
+  date      DateTime
+  progress  Int      @default(0)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  target Target @relation(fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([targetId, date])
+  @@index([targetId])
+  @@index([date])
+}
+
+model TargetResetLog {
+  id            String   @id @default(uuid())
+  targetId      String
+  resetType     String // "monthly", "weekly", "daily", "manual"
+  resetDate     DateTime
+  previousValue Int
+  newValue      Int
+  createdAt     DateTime @default(now())
+
+  @@index([targetId])
+  @@index([resetType])
+  @@index([resetDate])
+}
+
+model Task {
+  id                String       @id @default(uuid())
+  title             String       @default("Untitled Task")
+  description       String       @default("No description provided")
+  status            TaskStatus   @default(pending)
+  priority          TaskPriority @default(MEDIUM)
+  assignedToId      String
+  assignedById      String
+  dueDate           DateTime     @default(now())
+  completedAt       DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  taskType          String?
+  relatedEntityId   String?
+  relatedEntityType String?
+  metadata          Json?
+
+  // Multi-action task fields
+  actions     Json? // Store action checkboxes as JSON: {addSpecialties: boolean, getNominations: boolean, complete: boolean}
+  actionNotes Json? // Store notes for each action: {addSpecialties: string, getNominations: string, general: string}
+
+  assignedBy       Employee  @relation("CreatedTasks", fields: [assignedById], references: [id])
+  assignedTo       Employee  @relation("AssignedTasks", fields: [assignedToId], references: [id])
+  taskTypeRelation TaskType? @relation("TaskType", fields: [taskType], references: [name])
+
+  @@index([assignedToId])
+  @@index([assignedById])
+  @@index([status])
+  @@index([priority])
+  @@index([dueDate])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([taskType])
+}
+
+model TaskType {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  isActive    Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
+  tasks       Task[]   @relation("TaskType")
+}
+
+model InsuranceType {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  patients    Patient[] @relation("PatientInsuranceType")
+}
+
+model Transaction {
+  id                String                       @id @default(uuid())
+  patientId         String
+  totalRevenue      Float
+  companyShare      Float
+  eligibleAmount    Float
+  referralShare     Float
+  recordedById      String
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+  hospitalId        String
+  month             String?
+  source            String                       @default("manual")
+  year              String?
+  status            String
+  hospital          Hospital                     @relation(fields: [hospitalId], references: [id])
+  patient           Patient                      @relation(fields: [patientId], references: [id])
+  recordedBy        Employee                     @relation("RecordedBy", fields: [recordedById], references: [id])
+  visitSpecialities TransactionVisitSpeciality[]
+
+  @@index([patientId])
+  @@index([hospitalId])
+  @@index([status])
+  @@index([month, year])
+  @@index([source])
+  @@index([totalRevenue])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+model TransactionVisitSpeciality {
+  id                String          @id @default(uuid())
+  transactionId     String
+  visitSpecialityId String
+  transaction       Transaction     @relation(fields: [transactionId], references: [id])
+  visitSpeciality   VisitSpeciality @relation(fields: [visitSpecialityId], references: [id])
+
+  @@unique([transactionId, visitSpecialityId])
+}
+
+model Visit {
+  id                String            @id @default(uuid())
+  patientId         String
+  hospitalId        String
+  coordinatorId     String
+  salesId           String
+  visitDate         DateTime
+  isEmergency       Boolean?          @default(false)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  appointments      Appointment[]
+  nominations       Nomination[]
+  coordinator       Employee          @relation("CoordinatorVisits", fields: [coordinatorId], references: [id])
+  hospital          Hospital          @relation(fields: [hospitalId], references: [id])
+  patient           Patient           @relation(fields: [patientId], references: [id])
+  sales             Employee          @relation("SalesVisits", fields: [salesId], references: [id])
+  visitSpecialities VisitSpeciality[]
+  specialtyTask     SpecialtyTask?    @relation("SpecialtyTask")
+
+  @@index([patientId])
+  @@index([hospitalId])
+  @@index([coordinatorId])
+  @@index([salesId])
+  @@index([visitDate])
+  @@index([isEmergency])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+model VisitSpeciality {
+  id               String                       @id @default(uuid())
+  visitId          String
+  specialityId     String
+  doctorId         String
+  scheduledTime    DateTime
+  status           VisitSpecialityStatus        @default(scheduled)
+  details          String?
+  doctorName       String?
+  serviceTime      DateTime?
+  eventType        MedicalEventType?
+  eventDescription String?
+  eventNotes       String?
+  eventOutcome     String?
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+  commissions      Commission[]
+  transactions     TransactionVisitSpeciality[]
+  doctor           Doctor                       @relation(fields: [doctorId], references: [id])
+  speciality       Speciality                   @relation(fields: [specialityId], references: [id])
+  visit            Visit                        @relation(fields: [visitId], references: [id])
+
+  @@unique([visitId, specialityId, doctorId])
+  @@index([visitId])
+  @@index([specialityId])
+  @@index([doctorId])
+  @@index([status])
+  @@index([scheduledTime])
+  @@index([eventType])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+model Team {
+  id                 String       @id @default(uuid())
+  name               String       @unique
+  leaderId           String
+  leaderOriginalName String? // Store original leader name
+  isActive           Boolean      @default(true)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  leader             Employee     @relation("TeamLeader", fields: [leaderId], references: [id])
+  targets            Target[]     @relation("TeamTargets")
+  members            TeamMember[]
+
+  @@index([leaderId])
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+model TeamMember {
+  id         String   @id @default(uuid())
+  teamId     String
+  employeeId String
+  joinedAt   DateTime @default(now())
+  isActive   Boolean  @default(true)
+  team       Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, employeeId])
+  @@index([teamId])
+  @@index([employeeId])
+  @@index([isActive])
+  @@index([joinedAt])
+}
+
+enum Role {
+  admin
+  data_entry
+  sales
+  coordinator
+  finance
+  team_leader
+  driver
+  super_admin
+  observer
+}
+
+enum Gender {
+  male
+  female
+  other
+}
+
+enum TransactionStatus {
+  unbilled
+  billed
+  paid
+}
+
+enum NominationStatus {
+  new
+  contacting
+  contacted_approved
+  contacted_rejected
+}
+
+enum AppointmentStatus {
+  scheduled
+  completed
+  cancelled
+  no_show
+  assigned
+}
+
+enum TaskStatus {
+  pending
+  in_progress
+  completed
+  cancelled
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TargetType {
+  daily
+  weekly
+  monthly
+}
+
+enum ImportExportStatus {
+  success
+  failed
+}
+
+enum ActionType {
+  import
+  export
+}
+
+enum AccountStatus {
+  active
+  inactive
+}
+
+enum CommissionType {
+  PATIENT_CREATION
+  VISIT_SPECIALITY_ADDITION
+  NOMINATION_CONVERSION
+  MANUAL_ADJUSTMENT
+  FOLLOW_UP
+}
+
+enum VisitSpecialityStatus {
+  scheduled
+  in_progress
+  completed
+  cancelled
+  no_show
+}
+
+enum AppointmentSpecialityStatus {
+  scheduled
+  confirmed
+  completed
+  cancelled
+  no_show
+}
+
+enum MedicalServiceStatus {
+  not_scheduled
+  scheduled
+  in_progress
+  completed
+  cancelled
+  failed
+}
+
+enum MedicalEventType {
+  consultation
+  surgery
+  lab
+  xray
+  referral
+  follow_up
+  emergency
+  routine_check
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  PATIENT_ASSIGNED
+  INACTIVITY_ALERT
+  APPOINTMENT_REMINDER
+  NOMINATION_STATUS
+  TRANSACTION_EXPORT_REMINDER
+  SYSTEM_ALERT
+  SECURITY_ALERT
+  COMMISSION_EARNED
+  VISIT_SPECIALITY_ADDED
+  NOMINATION_CONVERTED
+}
+
+enum NotificationChannel {
+  IN_APP
+  SMS
+  EMAIL
+}
+
+enum NotificationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum AuditSeverity {
+  info
+  warning
+  error
+  critical
+}
+
+model FollowUpTask {
+  id           String             @id @default(uuid())
+  patientId    String
+  assignedToId String
+  assignedById String
+  status       FollowUpTaskStatus @default(pending)
+  notes        String?
+  taskId       String?            @unique
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  patient      Patient       @relation("FollowUpTasks", fields: [patientId], references: [id], onDelete: Cascade)
+  assignedTo   Employee      @relation("AssignedFollowUpTasks", fields: [assignedToId], references: [id], onDelete: Cascade)
+  assignedBy   Employee      @relation("CreatedFollowUpTasks", fields: [assignedById], references: [id], onDelete: Cascade)
+  appointments Appointment[] @relation("FollowUpTaskAppointments")
+
+  @@index([patientId])
+  @@index([assignedToId])
+  @@index([assignedById])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+enum FollowUpTaskStatus {
+  pending
+  approved
+  rejected
+  postponed
+}
+
+model EscortTask {
+  id            String   @id @default(uuid())
+  appointmentId String   @unique
+  driverId      String
+  status        String   @default("pending")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  appointment Appointment @relation("EscortTask", fields: [appointmentId], references: [id], onDelete: Cascade)
+  driver      Employee    @relation("EscortTasks", fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@index([appointmentId])
+  @@index([driverId])
+  @@index([status])
+}
+
+model SpecialtyTask {
+  id            String   @id @default(uuid())
+  visitId       String   @unique
+  coordinatorId String
+  specialtyName String
+  status        String   @default("pending")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  visit       Visit    @relation("SpecialtyTask", fields: [visitId], references: [id], onDelete: Cascade)
+  coordinator Employee @relation("SpecialtyTasks", fields: [coordinatorId], references: [id], onDelete: Cascade)
+
+  @@index([visitId])
+  @@index([coordinatorId])
+  @@index([status])
+}
+
+model NominationTask {
+  id            String   @id @default(uuid())
+  nominationId  String   @unique
+  coordinatorId String
+  patientName   String
+  patientPhone  String
+  status        String   @default("pending")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  nomination  Nomination @relation("NominationTask", fields: [nominationId], references: [id], onDelete: Cascade)
+  coordinator Employee   @relation("NominationTasks", fields: [coordinatorId], references: [id], onDelete: Cascade)
+
+  @@index([nominationId])
+  @@index([coordinatorId])
+  @@index([status])
+}
+
+model DataEntryTask {
+  id            String   @id @default(uuid())
+  patientId     String
+  dataEntryId   String
+  missingFields String[] // Array of missing field names
+  status        String   @default("pending")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  patient   Patient  @relation("DataEntryTasks", fields: [patientId], references: [id], onDelete: Cascade)
+  dataEntry Employee @relation("DataEntryTasks", fields: [dataEntryId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([dataEntryId])
+  @@index([status])
+}
+
+model SalesContactTask {
+  id             String   @id @default(uuid())
+  nominationId   String   @unique
+  salesId        String
+  patientName    String
+  patientPhone   String
+  status         String   @default("pending")
+  approvalStatus String? // "approved", "rejected", null
+  notes          String?
+  nationalId     String?
+  hospitalId     String?
+  specialties    String[] // Array of specialty names
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  nomination Nomination @relation("SalesContactTask", fields: [nominationId], references: [id], onDelete: Cascade)
+  sales      Employee   @relation("SalesContactTasks", fields: [salesId], references: [id], onDelete: Cascade)
+  hospital   Hospital?  @relation("SalesContactTasks", fields: [hospitalId], references: [id])
+
+  @@index([nominationId])
+  @@index([salesId])
+  @@index([status])
+  @@index([approvalStatus])
+}

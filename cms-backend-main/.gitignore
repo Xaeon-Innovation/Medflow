@@ -1,0 +1,14 @@
+*logs
+*.log
+logs
+node_modules
+.env
+backups
+*.sql.gz
+Requirements.md
+AUDIT_LOGGING_README.md
+AUTHENTICATION_README.md
+FEEDBACK_IMPORT_EXPORT_README.md
+NOTIFICATION_SYSTEM_README.md
+SECURITY_ENHANCEMENT_README.md
+

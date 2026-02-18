@@ -13,38 +13,53 @@ This document summarizes the steps taken to initialize the backend scaffold for 
   ```
   src/
   ├── config/      (db.ts, env.ts)
-  ├── controllers/ (Placeholder for request handlers)
+  ├── controllers/
   ├── middleware/  (errorHandler.ts)
-  ├── models/      (Placeholder for types)
-  ├── routes/      (Placeholder for API endpoints)
-  ├── services/    (Placeholder for business logic)
+  ├── models/
+  ├── routes/
+  ├── services/
   ├── utils/       (logger.ts)
-  ├── app.ts       (Express application configuration)
-  └── server.ts    (Entry point)
+  ├── app.ts
+  └── server.ts
   ```
 
 ## 3. Dependency Stack
 - **Web Framework**: Express.js
-- **ORM**: Prisma (connected to PostgreSQL)
+- **ORM**: Prisma (PostgreSQL)
 - **Security**: Helmet, CORS, JWT, BcryptJS
 - **Infrastructure**: Docker Compose (PostgreSQL, Redis)
 - **Tooling**: ESLint, Prettier, Nodemon, ts-node
 
-## 4. Completed Configurations
-- **Database**: Initialized Prisma schema and generated the Client.
-- **Environment**: Created `.env.example` and configured production/development settings.
-- **NPM Scripts**:
-  - `npm run dev`: Starts the development server with hot-reloading.
-  - `npm run build`: Generates Prisma client and compiles TypeScript.
-  - `npm run lint`: Performs static code analysis.
-  - `npm run format`: Formats code using Prettier.
+## 4. Database Configuration
+- Initialized Prisma schema with Unified Inbox models
+- Created `.env.example` for environment configuration
+- NPM Scripts: `dev`, `build`, `lint`, `format`, `db:migrate`, `db:seed`
 
-## 5. Phase 1 Preparation (Based on PDF Analysis)
-- Analyzed Business Requirements (v3.0) and Technical Guide.
-- Updated `implementation_plan.md` and `task.md` with:
-  - Unified Inbox schema requirements.
-  - AI No-Show Prediction logic (12-feature model).
-  - 24h automated reminder workflow strategy.
+## 5. Phase 1 Preparation (PDF Analysis)
+- Unified Inbox schema requirements
+- AI No-Show Prediction logic (12-feature model)
+- 24h automated reminder workflow strategy
+
+## 6. Docker Setup & Local Development Environment
+- **docker-compose.yml**: PostgreSQL 14 + Redis 7 + Backend + Frontend
+- **Dockerfile**: Multi-stage build for backend
+- **Dockerfile.frontend**: Multi-stage build for Next.js frontend
+- **Startup Scripts** (`scripts/dev.sh`, `scripts/dev.bat`):
+  - Starts Docker containers
+  - Runs Prisma migrations
+  - Seeds database
+  - **Starts backend + frontend in parallel**
+- **NPM Scripts**: `docker:up`, `docker:down`, `dev:full`
+
+### One-Command Full Stack:
+```bash
+scripts\dev.bat   # Windows
+./scripts/dev.sh  # Mac/Linux
+```
+
+**URLs**:
+- Backend: http://localhost:3000
+- Frontend: http://localhost:3001
 
 ---
-**Status**: Backend scaffold ready and pushed to GitHub (`ANF` branch).
+**Status**: Full stack Docker setup complete and pushed to GitHub (`ANF` branch).
