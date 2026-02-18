@@ -19,15 +19,15 @@ scripts\dev.bat
 
 Follow these steps in order to start the full application stack:
 
-### 1️⃣ Resume AI Model (Optional)
+### 1️. Resume AI Model (Optional)
 **Run:** `scripts\1-resume-ai.bat`
 > This starts the MedGemma 27B model on Vertex AI. Takes ~10-15 mins.
 
-### 2️⃣ Start Backend & Database
+### 2️. Start Backend & Database
 **Run:** `scripts\2-start-backend.bat`
 > Starts Docker (PostgreSQL/Redis) and the Backend API Server.
 
-### 3️⃣ Launch the Application
+### 3️. Launch the Application
 **Run:** `scripts\3-start-frontend.bat`
 > Launches the React frontend inside the Electron desktop shell.
 
